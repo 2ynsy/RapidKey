@@ -1,41 +1,37 @@
-# RapidKey ⚡ キー連打ツール
+# RapidKey⚡
 
-Windows上でキーを自動連打するデスクトップツールです。
+[![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org/)
+[![Platform](https://img.shields.io/badge/platform-windows-blue.svg)](https://www.microsoft.com/windows)
 
-## 機能
+**RapidKey** は、究極のパフォーマンスと直感的な操作性を追求した Windows 専用の超高速キー連打ツールです。
+ゲーム、自動化テスト、アクセシビリティなど、ミリ秒単位の正確さが求められるシーンで真価を発揮します。
 
-- 任意のキーを連打（クリックでキャプチャ or よく使うキーをワンクリック設定）
-- 連打速度を 1〜60 CPS で調整
-- **3 つのモード**
-  - 🔁 トグル：ボタンまたは F8 でオン/オフ
-  - 🖱 ホールド：F8 を押している間だけ連打
-  - 🔢 回数指定：指定した回数で自動停止
-- グローバルホットキー **F8**（どのウィンドウがアクティブでも動作）
-- リアルタイム統計表示（総打鍵数 / 実測 CPS / 経過時間）
+---
 
-## 使い方
+## 💎 特徴
 
-### Python で実行
+- **高性能・低レイテンシ**: Rust 言語による実装で、CPU負荷を最小限に抑えつつ安定した最高速クリックを実現。
+- **高精度アナリティクス**: 実測 CPS（1秒間の打鍵数）、総打鍵数、稼働時間をリアルタイム計算。
+- **柔軟なアクションモード**:
+  - **Toggle**: ホットキー（F8/F9）で ON/OFF を切り替え。
+  - **Hold**: ホットキーを押している間のみ動作。
+  - **Burst**: 指定した回数に到達すると自動停止。
+- **グローバルホットキー**: どのアプリケーションがアクティブでも `F8` または `F9` で即座に制御。
+- **ポータブル**: インストール不要。単一の `.exe` ファイルのみで動作。
 
-```bash
-# 依存ライブラリのインストール
-pip install keyboard
+---
 
-# 起動
-python rapidkey.py
-```
+## 🚀 インストール
 
-> ⚠️ `keyboard` ライブラリは管理者権限を推奨します。
+[GitHub Releases](https://github.com/Azure/summer-time-renda/releases) ページから最新の `RapidKey.exe` をダウンロードして実行してください。
 
-### EXE をビルド
+## 🛠 使い方
 
-```bash
-pip install pyinstaller
-python -m PyInstaller --onefile --noconsole --name RapidKey rapidkey.py
-# → dist/RapidKey.exe が生成されます
-```
+1. **TARGET KEY**: 中央の大きなボタンをクリックし、連打したいキーを押します。
+2. **CONFIGURATION**:
+   - **Speed**: 1〜120 CPS の範囲で速度を設定。
+   - **Mode**: 挙動（トグル/ホールド/バースト）を選択。
+3. **INITIALIZE**: `START` ボタンまたはホットキー（**F8 / F9**）で連打を開始。
 
-## 動作環境
-
-- Windows 10 / 11
-- Python 3.11+
+> [!IMPORTANT]
+> Windows のセキュリティ仕様により、他のアプリ（ゲーム等）でホットキーを有効にするには **「管理者として実行」** する必要がある場合があります。
