@@ -1,27 +1,21 @@
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.egg-info/
-*.egg
-.eggs/
+# Rust
+/target/
+Cargo.lock
 
-# 仮想環境
+# IDE/Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Legacy/Scrap
 .venv/
-venv/
-env/
-
-# PyInstaller ビルド成果物
 build/
 dist/
 *.spec
-
-# Windows
-Thumbs.db
-Desktop.ini
-
-# Rust
-target/
-**/*.rs.bk
-Cargo.lock
+rapidkey.py

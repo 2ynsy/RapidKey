@@ -58,17 +58,18 @@ pub fn spawn_event_listener(app_state: AppState, tx_start: Sender<()>, tx_stop: 
         app_state.log("Global Listener Active");
         
         // rdev::listen is blocking and provides its own message loop on Windows
+        let engine_state = app_state.clone();
         let result = listen(move |e| {
             if let EventType::KeyPress(key) = e.event_type {
                 // Log all keys briefly to help debug if it's hearing anything
-                app_state.log(&format!("Key: {:?}", key));
+                engine_state.log(&format!("Key: {:?}", key));
                 
                 // Use F8 or F9 as toggle keys
                 if key == RdevKey::F8 || key == RdevKey::F9 {
-                    app_state.toggle();
+                    engine_state.toggle();
                     
                     // Direct wake-up for the fire engine
-                    if app_state.is_running() {
+                    if engine_state.is_running() {
                         let _ = tx_start.send(());
                     } else {
                         let _ = tx_stop.send(());
@@ -76,12 +77,12 @@ pub fn spawn_event_listener(app_state: AppState, tx_start: Sender<()>, tx_stop: 
                 }
                 
                 // Capture target key logic
-                if app_state.capturing_key.load(Ordering::SeqCst) 
+                if engine_state.capturing_key.load(Ordering::SeqCst) 
                     && key != RdevKey::F8 
                     && key != RdevKey::F9
                     && key != RdevKey::Escape 
                 {
-                    app_state.set_target_key(key);
+                    engine_state.set_target_key(key);
                 }
             }
         });
