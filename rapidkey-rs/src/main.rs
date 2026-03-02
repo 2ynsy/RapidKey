@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 use eframe::egui;
 use enigo::{Enigo, Key, Keyboard, Settings, Direction};
 use rdev::{listen, EventType, Key as RdevKey};
@@ -56,26 +58,34 @@ fn main() -> eframe::Result {
     let (tx_start, rx_start) = unbounded::<()>();
     let (tx_stop, rx_stop) = unbounded::<()>();
 
-    // Engine Thread
+    // Engine Thread (Keyboard Injection)
     let state_engine = Arc::new(app_state.clone());
     thread::spawn(move || {
         let mut enigo = Enigo::new(&Settings::default()).expect("Failed to initialize Enigo");
         let mut last_fire = Instant::now();
         let mut presses_in_last_sec = Vec::new();
 
+        println!("Engine thread started.");
+
         loop {
-            // Check for explicit commands
+            // Check for explicit commands from UI or F8
             while let Ok(_) = rx_start.try_recv() {
-                state_engine.is_running.store(true, Ordering::SeqCst);
-                *state_engine.start_time.lock().unwrap() = Some(Instant::now());
+                if !state_engine.is_running.load(Ordering::SeqCst) {
+                    state_engine.is_running.store(true, Ordering::SeqCst);
+                    *state_engine.start_time.lock().unwrap() = Some(Instant::now());
+                    println!("Rapid-fire started.");
+                }
             }
             while let Ok(_) = rx_stop.try_recv() {
-                state_engine.is_running.store(false, Ordering::SeqCst);
-                let start = *state_engine.start_time.lock().unwrap();
-                if let Some(s) = start {
-                    *state_engine.elapsed_time.lock().unwrap() += s.elapsed();
+                if state_engine.is_running.load(Ordering::SeqCst) {
+                    state_engine.is_running.store(false, Ordering::SeqCst);
+                    let start = *state_engine.start_time.lock().unwrap();
+                    if let Some(s) = start {
+                        *state_engine.elapsed_time.lock().unwrap() += s.elapsed();
+                    }
+                    *state_engine.start_time.lock().unwrap() = None;
+                    println!("Rapid-fire stopped.");
                 }
-                *state_engine.start_time.lock().unwrap() = None;
             }
 
             let is_running = state_engine.is_running.load(Ordering::SeqCst);
@@ -92,8 +102,10 @@ fn main() -> eframe::Result {
                     
                     if last_fire.elapsed() >= interval {
                         if let Some(enigo_key) = map_rdev_to_enigo(rdev_key) {
-                            // High performance clicking
-                            let _ = enigo.key(enigo_key, Direction::Click);
+                            // More robust firing: Press -> wait -> Release
+                            let _ = enigo.key(enigo_key, Direction::Press);
+                            thread::sleep(Duration::from_millis(1));
+                            let _ = enigo.key(enigo_key, Direction::Release);
                             
                             state_engine.total_presses.fetch_add(1, Ordering::SeqCst);
                             presses_in_last_sec.push(Instant::now());
@@ -101,6 +113,7 @@ fn main() -> eframe::Result {
 
                             if mode == Mode::Count && total + 1 >= repeat_limit as u64 {
                                 state_engine.is_running.store(false, Ordering::SeqCst);
+                                println!("Count limit reached.");
                             }
                         }
                     }
@@ -112,16 +125,16 @@ fn main() -> eframe::Result {
             presses_in_last_sec.retain(|&t| now.duration_since(t) <= Duration::from_secs(1));
             state_engine.measured_cps.store(presses_in_last_sec.len() as u64, Ordering::SeqCst);
 
-            // CPU friendly sleep
-            thread::sleep(Duration::from_millis(1));
+            thread::sleep(Duration::from_micros(100)); // tight loop but friendly
         }
     });
 
-    // Global Key Listener (hooks)
+    // Global Key Listener (rdev) for F8 Toggle
     let state_listener = app_state.clone();
     let tx_s = tx_start.clone();
     let tx_p = tx_stop.clone();
     thread::spawn(move || {
+        println!("Global key listener started (requires Admin to be fully reliable).");
         if let Err(error) = listen(move |event| {
             if let EventType::KeyPress(key) = event.event_type {
                 // Global Toggle: F8
@@ -134,9 +147,9 @@ fn main() -> eframe::Result {
                     }
                 }
 
-                // Capture key if in capture mode
+                // Capture key if in capture mode (fallback to global capture)
                 if state_listener.capturing_key.load(Ordering::SeqCst) {
-                    if key != RdevKey::F8 {
+                    if key != RdevKey::F8 && key != RdevKey::Escape {
                         *state_listener.target_key.lock().unwrap() = Some(key);
                         let name = format!("{:?}", key).to_uppercase();
                         *state_listener.target_key_name.lock().unwrap() = name;
@@ -145,7 +158,7 @@ fn main() -> eframe::Result {
                 }
             }
         }) {
-            eprintln!("Error listening to keys: {:?}", error);
+            eprintln!("rdev hook error: {:?}", error);
         }
     });
 
@@ -161,16 +174,27 @@ fn main() -> eframe::Result {
         "RapidKey Rust ⚡",
         options,
         Box::new(|_cc| {
-            // Apply custom dark/premium style
             let mut visuals = egui::Visuals::dark();
-            visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(13, 15, 24); // BG
-            visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(19, 22, 43);      // SURFACE
-            visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(108, 99, 255)); // ACCENT
+            visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(13, 15, 24); 
+            visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(19, 22, 43);      
+            visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(108, 99, 255)); 
             _cc.egui_ctx.set_visuals(visuals);
+
+            setup_custom_fonts(&_cc.egui_ctx);
             
             Ok(Box::new(RapidKeyUI::new(app_state, tx_start, tx_stop)))
         }),
     )
+}
+
+fn setup_custom_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    if let Ok(font_data) = std::fs::read("C:\\Windows\\Fonts\\msgothic.ttc") {
+        fonts.font_data.insert("jp_font".to_owned(), egui::FontData::from_owned(font_data).into());
+        fonts.families.get_mut(&egui::FontFamily::Proportional).unwrap().insert(0, "jp_font".to_owned());
+        fonts.families.get_mut(&egui::FontFamily::Monospace).unwrap().push("jp_font".to_owned());
+    }
+    ctx.set_fonts(fonts);
 }
 
 struct RapidKeyUI {
@@ -189,6 +213,23 @@ impl eframe::App for RapidKeyUI {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let is_running = self.state.is_running.load(Ordering::SeqCst);
         let capturing = self.state.capturing_key.load(Ordering::SeqCst);
+
+        // UI-based key capture inside the window (high reliability)
+        if capturing {
+            ctx.input(|i| {
+                for event in &i.events {
+                    if let egui::Event::Key { key, pressed: true, .. } = event {
+                        if *key != egui::Key::F8 && *key != egui::Key::Escape {
+                            // Map egui::Key back to rdev (primitive but works for setting)
+                            let rkey = map_egui_to_rdev(*key);
+                            *self.state.target_key.lock().unwrap() = Some(rkey);
+                            *self.state.target_key_name.lock().unwrap() = format!("{:?}", rkey).to_uppercase();
+                            self.state.capturing_key.store(false, Ordering::SeqCst);
+                        }
+                    }
+                }
+            });
+        }
         
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| {
@@ -198,18 +239,12 @@ impl eframe::App for RapidKeyUI {
                 ui.add_space(20.0);
             });
 
-            // TARGET KEY CARD
             ui.group(|ui| {
                 ui.set_width(420.0);
                 ui.label(egui::RichText::new("📌 ターゲットキー").strong().size(11.0).color(egui::Color32::from_rgb(120, 128, 168)));
                 ui.add_space(8.0);
                 
-                let text = if capturing { 
-                    "⌨ キーを押してください...".to_string() 
-                } else { 
-                    self.state.target_key_name.lock().unwrap().clone() 
-                };
-
+                let text = if capturing { "⌨ キーを押してください...".to_string() } else { self.state.target_key_name.lock().unwrap().clone() };
                 let color = if capturing { egui::Color32::from_rgb(108, 99, 255) } else { egui::Color32::WHITE };
                 
                 if ui.add(egui::Button::new(egui::RichText::new(text).size(20.0).strong().color(color)).min_size(egui::vec2(400.0, 60.0))).clicked() {
@@ -222,12 +257,12 @@ impl eframe::App for RapidKeyUI {
                      if ui.button("Z").clicked() { self.set_key(RdevKey::KeyZ, "KeyZ"); }
                      if ui.button("X").clicked() { self.set_key(RdevKey::KeyX, "KeyX"); }
                      if ui.button("Space").clicked() { self.set_key(RdevKey::Space, "Space"); }
+                     if ui.button("Enter").clicked() { self.set_key(RdevKey::Return, "Return"); }
                 });
             });
 
             ui.add_space(15.0);
 
-            // SETTINGS CARD
             ui.group(|ui| {
                 ui.set_width(420.0);
                 ui.label(egui::RichText::new("⚙️ 設定").strong().size(11.0).color(egui::Color32::from_rgb(120, 128, 168)));
@@ -264,11 +299,11 @@ impl eframe::App for RapidKeyUI {
                 
                 ui.add_space(10.0);
                 ui.label(egui::RichText::new("F8 で開始・停止").italics().color(egui::Color32::GRAY));
+                ui.label(egui::RichText::new("※管理者権限での実行を推奨").size(10.0).color(egui::Color32::DARK_GRAY));
             });
 
             ui.add_space(20.0);
 
-            // MAIN BUTTON
             let btn_text = if is_running { "⬛ 停止" } else { "▶ 連打開始" };
             let btn_color = if is_running { egui::Color32::from_rgb(255, 94, 122) } else { egui::Color32::from_rgb(108, 99, 255) };
             
@@ -276,16 +311,11 @@ impl eframe::App for RapidKeyUI {
                 .fill(btn_color)
                 .min_size(egui::vec2(420.0, 60.0))).clicked() 
             {
-                if is_running {
-                    let _ = self.tx_stop.send(());
-                } else {
-                    let _ = self.tx_start.send(());
-                }
+                if is_running { let _ = self.tx_stop.send(()); } else { let _ = self.tx_start.send(()); }
             }
 
             ui.add_space(20.0);
 
-            // STATS CARD
             ui.group(|ui| {
                 ui.set_width(420.0);
                 ui.label(egui::RichText::new("📊 統計").strong().size(11.0).color(egui::Color32::from_rgb(120, 128, 168)));
@@ -302,20 +332,14 @@ impl eframe::App for RapidKeyUI {
                     });
                     columns[2].vertical_centered(|ui| {
                         let total_elapsed = *self.state.elapsed_time.lock().unwrap();
-                        let current_session = if let Some(start) = *self.state.start_time.lock().unwrap() {
-                            start.elapsed()
-                        } else {
-                            Duration::ZERO
-                        };
-                        let elapsed = total_elapsed + current_session;
-                        ui.label(egui::RichText::new(format!("{:.1} s", elapsed.as_secs_f32())).size(24.0).strong());
+                        let current_session = if let Some(start) = *self.state.start_time.lock().unwrap() { start.elapsed() } else { Duration::ZERO };
+                        ui.label(egui::RichText::new(format!("{:.1} s", (total_elapsed + current_session).as_secs_f32())).size(24.0).strong());
                         ui.label("経過時間");
                     });
                 });
             });
 
-            // Update UI periodically during run
-            ctx.request_repaint_after(Duration::from_millis(16)); // ~60fps stats
+            ctx.request_repaint_after(Duration::from_millis(16));
         });
     }
 }
@@ -357,18 +381,33 @@ fn map_rdev_to_enigo(key: RdevKey) -> Option<Key> {
         RdevKey::KeyZ => Some(Key::Unicode('z')),
         RdevKey::Space => Some(Key::Space),
         RdevKey::Return => Some(Key::Return),
-        RdevKey::F1 => Some(Key::F1),
-        RdevKey::F2 => Some(Key::F2),
-        RdevKey::F3 => Some(Key::F3),
-        RdevKey::F4 => Some(Key::F4),
-        RdevKey::F5 => Some(Key::F5),
-        RdevKey::F6 => Some(Key::F6),
-        RdevKey::F7 => Some(Key::F7),
-        RdevKey::F8 => Some(Key::F8),
-        RdevKey::F9 => Some(Key::F9),
-        RdevKey::F10 => Some(Key::F10),
-        RdevKey::F11 => Some(Key::F11),
-        RdevKey::F12 => Some(Key::F12),
+        RdevKey::F1 => Some(Key::F1), RdevKey::F2 => Some(Key::F2),
+        RdevKey::F3 => Some(Key::F3), RdevKey::F4 => Some(Key::F4),
+        RdevKey::F5 => Some(Key::F5), RdevKey::F6 => Some(Key::F6),
+        RdevKey::F7 => Some(Key::F7), RdevKey::F8 => Some(Key::F8),
+        RdevKey::F9 => Some(Key::F9), RdevKey::F10 => Some(Key::F10),
+        RdevKey::F11 => Some(Key::F11), RdevKey::F12 => Some(Key::F12),
         _ => None,
+    }
+}
+
+fn map_egui_to_rdev(key: egui::Key) -> RdevKey {
+    match key {
+        egui::Key::A => RdevKey::KeyA, egui::Key::B => RdevKey::KeyB,
+        egui::Key::C => RdevKey::KeyC, egui::Key::D => RdevKey::KeyD,
+        egui::Key::E => RdevKey::KeyE, egui::Key::F => RdevKey::KeyF,
+        egui::Key::G => RdevKey::KeyG, egui::Key::H => RdevKey::KeyH,
+        egui::Key::I => RdevKey::KeyI, egui::Key::J => RdevKey::KeyJ,
+        egui::Key::K => RdevKey::KeyK, egui::Key::L => RdevKey::KeyL,
+        egui::Key::M => RdevKey::KeyM, egui::Key::N => RdevKey::KeyN,
+        egui::Key::O => RdevKey::KeyO, egui::Key::P => RdevKey::KeyP,
+        egui::Key::Q => RdevKey::KeyQ, egui::Key::R => RdevKey::KeyR,
+        egui::Key::S => RdevKey::KeyS, egui::Key::T => RdevKey::KeyT,
+        egui::Key::U => RdevKey::KeyU, egui::Key::V => RdevKey::KeyV,
+        egui::Key::W => RdevKey::KeyW, egui::Key::X => RdevKey::KeyX,
+        egui::Key::Y => RdevKey::KeyY, egui::Key::Z => RdevKey::KeyZ,
+        egui::Key::Space => RdevKey::Space,
+        egui::Key::Enter => RdevKey::Return,
+        _ => RdevKey::Unknown(0),
     }
 }
