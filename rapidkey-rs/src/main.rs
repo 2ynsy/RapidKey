@@ -7,7 +7,7 @@ use std::sync::{
 };
 use std::thread;
 use std::time::{Duration, Instant};
-use crossbeam_channel::{unbounded, Receiver, Sender};
+use crossbeam_channel::{unbounded, Sender};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Mode {
@@ -16,6 +16,7 @@ enum Mode {
     Count,
 }
 
+#[derive(Clone)]
 struct AppState {
     target_key: Arc<Mutex<Option<RdevKey>>>,
     target_key_name: Arc<Mutex<String>>,
@@ -162,7 +163,6 @@ fn main() -> eframe::Result {
         Box::new(|_cc| {
             // Apply custom dark/premium style
             let mut visuals = egui::Visuals::dark();
-            visuals.window_rounding = 12.0.into();
             visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(13, 15, 24); // BG
             visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(19, 22, 43);      // SURFACE
             visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(108, 99, 255)); // ACCENT
@@ -329,7 +329,7 @@ impl RapidKeyUI {
 
 fn map_rdev_to_enigo(key: RdevKey) -> Option<Key> {
     match key {
-        RdevKey::KeyA => Some(Key::O), // enigo mapping for standard keys
+        RdevKey::KeyA => Some(Key::Unicode('a')),
         RdevKey::KeyB => Some(Key::Unicode('b')),
         RdevKey::KeyC => Some(Key::Unicode('c')),
         RdevKey::KeyD => Some(Key::Unicode('d')),
