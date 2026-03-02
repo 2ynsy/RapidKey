@@ -6,13 +6,13 @@ use eframe::egui;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-pub struct RapidKeyUI {
+pub struct FastPulseKeyUI {
     pub state: AppState,
     pub tx_start: Sender<()>,
     pub tx_stop: Sender<()>,
 }
 
-impl RapidKeyUI {
+impl FastPulseKeyUI {
     pub fn new(state: AppState, tx_start: Sender<()>, tx_stop: Sender<()>) -> Self {
         Self { state, tx_start, tx_stop }
     }
@@ -20,7 +20,7 @@ impl RapidKeyUI {
     fn render_header(&self, ui: &mut egui::Ui) {
         ui.vertical_centered(|ui| {
             ui.spacing_mut().item_spacing.y = 2.0;
-            ui.label(egui::RichText::new("⚡ RAPIDKEY PRO").size(32.0).strong().color(theme::TEXT_TITLE));
+            ui.label(egui::RichText::new("⚡ FASTPULSEKEY").size(32.0).strong().color(theme::TEXT_TITLE));
             ui.label(egui::RichText::new("PRECISION PERFORMANCE ENGINE").size(11.0).color(theme::TEXT_SUB).extra_letter_spacing(1.5));
         });
         ui.add_space(theme::HEADER_BOTTOM);
@@ -102,7 +102,7 @@ impl RapidKeyUI {
     }
 }
 
-impl eframe::App for RapidKeyUI {
+impl eframe::App for FastPulseKeyUI {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let is_running = self.state.is_running();
         let capturing = self.state.capturing_key.load(Ordering::SeqCst);

@@ -9,7 +9,7 @@ mod ui;
 use crossbeam_channel::unbounded;
 use eframe::egui;
 use models::AppState;
-use ui::RapidKeyUI;
+use ui::FastPulseKeyUI;
 use utils::{setup_fonts, setup_theme};
 
 fn main() -> eframe::Result {
@@ -29,12 +29,12 @@ fn main() -> eframe::Result {
     };
 
     eframe::run_native(
-        "RapidKey Pro ⚡",
+        "FastPulseKey ⚡",
         options,
         Box::new(|cc| {
             setup_theme(&cc.egui_ctx);
             setup_fonts(&cc.egui_ctx);
-            Ok(Box::new(RapidKeyUI::new(app_state, tx_start, tx_stop)))
+            Ok(Box::new(FastPulseKeyUI::new(app_state, tx_start, tx_stop)))
         }),
     )
 }
