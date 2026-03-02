@@ -21,6 +21,7 @@ dist/
 Thumbs.db
 Desktop.ini
 
-# IDE
-.vscode/
-.idea/
+# Rust
+target/
+**/*.rs.bk
+Cargo.lock
