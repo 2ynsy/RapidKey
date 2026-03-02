@@ -1,6 +1,6 @@
 # RapidKey⚡
 
-[![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/rust-2026-orange.svg)](https://www.rust-lang.org/)
 [![Platform](https://img.shields.io/badge/platform-windows-blue.svg)](https://www.microsoft.com/windows)
 
 **RapidKey** は、究極のパフォーマンスと直感的な操作性を追求した Windows 専用の超高速キー連打ツールです。
